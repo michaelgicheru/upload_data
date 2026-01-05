@@ -137,6 +137,24 @@ read_aims_medical <- function(file_path, data_type) {
 	}
 }
 
+read_sirius <- function(file_path, data_type) {
+	if (data_type == "Claims") {
+		col_types <- c(
+			rep("text", 3),
+			rep("date", 2),
+			rep("text", 4),
+			rep("numeric", 2),
+			"date",
+			rep("numeric", 4),
+			"text"
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
+
+		return(out)
+	}
+}
+
 import_data <- function(system, data_type) {
 	file_path <- here::here(
 		input_dir,
@@ -147,6 +165,7 @@ import_data <- function(system, data_type) {
 		system,
 		Insis = read_insis(file_path = file_path, data_type = data_type),
 		Aims = read_aims(file_path = file_path, data_type = data_type),
+		Sirius = read_sirius(file_path = file_path, data_type = data_type),
 		"Aims Medical" = read_aims_medical(
 			file_path = file_path,
 			data_type = data_type
