@@ -24,6 +24,21 @@ val_date <- ymd(readline(prompt = "Input Valuation Date (YYYY-MM-DD):"))
 input_dir <- here::here("input", format(val_date, "%B %Y"))
 prior_suffix <- format(floor_date(val_date, unit = "month") - days(1), "%m%y")
 current_suffix <- format(val_date, "%m%y")
+lookup <- map(
+	.x = readxl::excel_sheets(here::here(input_dir, "Lookup.xlsx")),
+	.f = \(sheet_names) {
+		{
+			readxl::read_xlsx(
+				path = here::here(input_dir, "Lookup.xlsx"),
+				sheet = sheet_names
+			)
+		} |>
+			janitor::clean_names()
+	}
+) |>
+	set_names(nm = readxl::excel_sheets(here::here(input_dir, "Lookup.xlsx"))) |>
+	janitor::clean_names()
+
 
 system_dict <- sort(c("Aims", "Insis", "Sirius", "Others"))
 
@@ -73,6 +88,116 @@ menu_selection <- function() {
 	return(out)
 }
 
+# Standardise characters in columns
+standardise_names <- function(.data, .column) {
+	.data <- .data |>
+		mutate(
+			# remove special characters
+			{{ .column }} := gsub(
+				pattern = "[[:punct:]]",
+				replacement = '',
+				x = {{ .column }}
+			),
+			# remove brackets
+			{{ .column }} := gsub(
+				pattern = "[()]",
+				replacement = '',
+				x = {{ .column }}
+			),
+			# replace spaces with one space only
+			{{ .column }} := gsub(
+				pattern = "\\s+",
+				replacement = ' ',
+				x = {{ .column }}
+			)
+		)
+
+	return(.data)
+}
+
+# Classification function
+classify_med <- function(data, insurance_column, agent_column, scheme_column) {
+	data <- data |>
+		mutate(
+			SCHEME_NAME = !!sym(scheme_column),
+			AGENCY_NAME = !!sym(agent_column)
+		) |>
+		standardise_names(.column = SCHEME_NAME) |>
+		standardise_names(.column = AGENCY_NAME)
+
+	# Change agent and scheme columns
+	agent_column <- "AGENCY_NAME"
+	scheme_column <- "SCHEME_NAME"
+
+	out <- tibble(
+		# check whether it is retail/corporate/bancassurance
+		class = if_else(
+			data[[insurance_column]] == "Britam Pandemic Cover",
+			"Britam Pandemic Cover",
+			if_else(
+				# check for bancassurance agents while simulateneously standardising the names
+				data[[agent_column]] %in% lookup$agent_names$agent,
+				stringi::stri_replace_all_regex(
+					str = data[[agent_column]],
+					pattern = paste0("^", lookup$agent_names$agent, "$"),
+					replacement = lookup$agent_names$cleaned_agent,
+					vectorize_all = FALSE
+				),
+				if_else(
+					# anything with milele in the name is a retail policy
+					grepl("Milele", data[[insurance_column]], ignore.case = TRUE),
+					"Britam Milele",
+					# everything else is assumed to be a corporate policy
+					"Group Medical"
+				)
+			)
+		)
+	) |>
+		mutate(
+			# work on the corporate schemes; standardise the names
+			cleaned_scheme_name = if_else(
+				class == "Group Medical",
+				if_else(
+					data[[scheme_column]] %in% lookup$scheme_remaning$scheme_name,
+					stringi::stri_replace_all_regex(
+						str = data[[scheme_column]],
+						pattern = paste0("^", lookup$scheme_remaning$scheme_name, "$"),
+						replacement = lookup$scheme_remaning$cleaned_scheme_name,
+						vectorize_all = FALSE
+					),
+					data[[scheme_column]]
+				),
+				class
+			),
+			chann = if_else(
+				class %in% lookup$agent_names$cleaned_agent,
+				"P&D",
+				if_else(
+					class == "Britam Milele" | class == "Britam Pandemic Cover",
+					"Retail",
+					if_else(class == "Group Medical", "Corporate", "Corporate"),
+					missing = "Corporate"
+				)
+			),
+			agency_name = if_else(
+				class %in% lookup$agent_names$cleaned_agent,
+				class,
+				data[[agent_column]]
+			)
+		) |>
+		rename(
+			CLASS_DESCRIPTION = class,
+			SCHEME_NAME = cleaned_scheme_name,
+			CHANN = chann,
+			AGENCY_NAME = agency_name
+		) |>
+		select(CHANN, CLASS_DESCRIPTION, AGENCY_NAME, SCHEME_NAME)
+
+	out <- data |> select(-SCHEME_NAME, -AGENCY_NAME) |> bind_cols(out)
+
+	return(out)
+}
+
 read_insis <- function(file_path, data_type) {
 	if (data_type == "Claims") {
 		col_types <- c(
@@ -98,6 +223,28 @@ read_insis <- function(file_path, data_type) {
 			list_rbind() |>
 			rename(START_DATE = INSR_BEGIN, END_DATE = INSR_END) |>
 			mutate(across(where(is.POSIXt), ~ as_date(.x)))
+	}
+
+	if (data_type == "Premium") {
+		col_types <- c(
+			rep("text", 3),
+			rep("numeric", 2),
+			"text",
+			rep("numeric", 2),
+			"text",
+			"numeric",
+			rep("text", 3),
+			"numeric",
+			"text",
+			rep("numeric", 12)
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types) |>
+			classify_med(
+				insurance_column = "INSURANCE_TYPE",
+				agent_column = "AGENCY_NAME_RAW",
+				scheme_column = "CLIENT_NAME"
+			)
 	}
 
 	return(out)
