@@ -103,6 +103,40 @@ read_insis <- function(file_path, data_type) {
 	return(out)
 }
 
+read_aims <- function(file_path, data_type) {
+	if (data_type == "Premium") {
+		col_types <- c(
+			rep("text", 6),
+			"numeric",
+			rep("text", 8),
+			rep("numeric", 6),
+			"text",
+			rep("numeric", 20),
+			rep("text", 6)
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
+
+		return(out)
+	}
+}
+
+read_aims_medical <- function(file_path, data_type) {
+	if (data_type == "Premium") {
+		col_types <- c(
+			rep("text", 4),
+			rep("numeric", 2),
+			rep("text", 3),
+			rep("numeric", 7),
+			"text"
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
+
+		return(out)
+	}
+}
+
 import_data <- function(system, data_type) {
 	file_path <- here::here(
 		input_dir,
@@ -111,7 +145,13 @@ import_data <- function(system, data_type) {
 
 	out <- switch(
 		system,
-		Insis = read_insis(file_path = file_path, data_type = data_type)
+		Insis = read_insis(file_path = file_path, data_type = data_type),
+		Aims = read_aims(file_path = file_path, data_type = data_type),
+		"Aims Medical" = read_aims_medical(
+			file_path = file_path,
+			data_type = data_type
+		),
+		cli::cli_abort(message = "The system {.val {system}} is unhandled")
 	)
 
 	return(out)
@@ -130,7 +170,7 @@ update_table <- function(
 	)
 
 	if (!fs::file_exists(prior_path)) {
-		cli::cli_alert_info(text = "Fetching prior data from {schema_table}")
+		cli::cli_alert_info(text = "Fetching prior data from {.val {schema_table}}")
 
 		tbl(con, dbplyr::in_schema(schema = "WORKSPACE", table = schema_table)) |>
 			collect() |>
@@ -139,7 +179,7 @@ update_table <- function(
 		cli::cli_alert_success(text = "Prior data written to {.path {prior_path}}")
 	}
 
-	cli::cli_alert_info(text = "Uploading data to {schema_table}")
+	cli::cli_alert_info(text = "Uploading data to {.val {schema_table}}")
 
 	if (!overwrite) {
 		dbAppendTable(
@@ -157,7 +197,9 @@ update_table <- function(
 			overwrite = TRUE
 		)
 	}
-	cli::cli_alert_success(text = "Data upload to {schema_table} complete.")
+	cli::cli_alert_success(
+		text = "Data upload to {.val {schema_table}} complete."
+	)
 
 	beepr::beep()
 }
@@ -180,5 +222,7 @@ upload_data <- function(overwrite = FALSE) {
 		overwrite = overwrite
 	)
 }
+
+upload_data(overwrite = FALSE)
 
 dbDisconnect(con)
