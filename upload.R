@@ -263,9 +263,55 @@ read_aims <- function(file_path, data_type) {
 		)
 
 		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
-
-		return(out)
 	}
+
+	if (data_type == "Claims") {
+		col_types <- c(
+			rep("text", 6),
+			rep("numeric", 3),
+			rep("text", 2),
+			rep("date", 2),
+			"text",
+			rep("date", 2),
+			"guess",
+			rep("date", 2),
+			"text",
+			"numeric",
+			rep("text", 3),
+			rep("numeric", 16),
+			rep("text", 10),
+			rep("numeric", 2),
+			"text",
+			rep("numeric", 2),
+			rep("text", 2)
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
+	}
+
+	return(out)
+}
+
+read_old_aims <- function(file_path, data_type) {
+	if (data_type == "Claims") {
+		col_types <- c(
+			rep("text", 6),
+			rep("numeric", 3),
+			rep("text", 2),
+			rep("date", 2),
+			"text",
+			rep("date", 5),
+			"text",
+			"numeric",
+			rep("text", 3),
+			rep("numeric", 11),
+			rep("text", 8)
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
+	}
+
+	return(out)
 }
 
 read_aims_medical <- function(file_path, data_type) {
@@ -317,6 +363,7 @@ import_data <- function(system, data_type) {
 			file_path = file_path,
 			data_type = data_type
 		),
+		"Old Aims" = read_old_aims(file_path = file_path, data_type = data_type),
 		cli::cli_abort(message = "The system {.val {system}} is unhandled")
 	)
 
@@ -390,5 +437,3 @@ upload_data <- function(overwrite = FALSE) {
 }
 
 upload_data(overwrite = FALSE)
-
-dbDisconnect(con)
