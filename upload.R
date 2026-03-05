@@ -437,3 +437,5 @@ upload_data <- function(overwrite = FALSE) {
 }
 
 upload_data(overwrite = FALSE)
+
+dbDisconnect(con)
