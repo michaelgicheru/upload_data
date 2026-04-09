@@ -40,10 +40,10 @@ lookup <- map(
 	janitor::clean_names()
 
 
-system_dict <- sort(c("Aims", "Insis", "Sirius", "Others"))
+system_dict <- sort(c("Aims", "Insis", "Sirius", "Others", "Equity PTD"))
 
 # fmt: skip
-schema_dict <- c(KE_AIMS_GB_PREM = "Aims", KE_SIRIUS_GB_PREM = "Sirius", KE_EMC_GB_PREM = "EMC",KE_EMC_AFYABYM_PREM = "Afya EMC", KE_INSIS_MED_PREM = "Insis", KE_AIMS_MED_PREM = "Aims Medical", KE_INSIS_MED_CLAIMS = "Insis", KE_BMI_AFYABYM_PREM = "Afya BMI", KE_BMI_GB_PREM = "BMI", KE_OLDAIMS_GB_CLAIMS = "Old Aims", KE_NEWAIMS_GB_CLAIMS = "Aims", KE_SIRIUS_GB_CLAIMS = "Sirius")
+schema_dict <- c(KE_AIMS_GB_PREM = "Aims", KE_SIRIUS_GB_PREM = "Sirius", KE_EMC_GB_PREM = "EMC",KE_EMC_AFYABYM_PREM = "Afya EMC", KE_INSIS_MED_PREM = "Insis", KE_AIMS_MED_PREM = "Aims Medical", KE_INSIS_MED_CLAIMS = "Insis", KE_BMI_AFYABYM_PREM = "Afya BMI", KE_BMI_GB_PREM = "BMI", KE_OLDAIMS_GB_CLAIMS = "Old Aims", KE_NEWAIMS_GB_CLAIMS = "Aims", KE_SIRIUS_GB_CLAIMS = "Sirius", EQUITY_PTD_PREM = "Equity PTD")
 
 menu_selection <- function() {
 	system <- (system_dict[menu(system_dict, graphics = TRUE, title = "System")])
@@ -63,6 +63,8 @@ menu_selection <- function() {
 			"))"
 		)
 		pattern <- glue("^KE{exclude_pattern}.*{data_type}$")
+	} else if (system == "Equity PTD") {
+		pattern <- "EQUITY_PTD_PREM"
 	} else {
 		pattern <- glue("^KE.*{toupper(system)}.*{data_type}$")
 	}
@@ -348,6 +350,23 @@ read_sirius <- function(file_path, data_type) {
 	}
 }
 
+read_equity <- function(file_path, data_type) {
+	if (data_type == "Premium") {
+		col_types <- c(
+			"text",
+			"numeric",
+			rep("text", 3),
+			"numeric",
+			rep("text", 2),
+			rep("numeric", 9)
+		)
+
+		out <- readxl::read_xlsx(path = file_path, col_types = col_types)
+
+		return(out)
+	}
+}
+
 import_data <- function(system, data_type) {
 	file_path <- here::here(
 		input_dir,
@@ -364,6 +383,7 @@ import_data <- function(system, data_type) {
 			data_type = data_type
 		),
 		"Old Aims" = read_old_aims(file_path = file_path, data_type = data_type),
+		"Equity PTD" = read_equity(file_path = file_path, data_type = data_type),
 		cli::cli_abort(message = "The system {.val {system}} is unhandled")
 	)
 
